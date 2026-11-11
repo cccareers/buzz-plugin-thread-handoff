@@ -16,7 +16,7 @@
 - [x] Defects: demonstrate each failure before changing src/plugin.ts, make the smallest correction, rebuild plugin.js, and rerun the regression and full suite.
 - [x] CI/docs: add clean-install build/type/test checks and document commands, coverage, and mock-host limitations.
 - [x] Validation/review: run full suite, TypeScript checking, bundle consistency check, and independent code review; resolve findings.
-- [ ] Publish: commit, push, open and link PR, inspect initial checks/comments, then enable PR monitoring.
+- [x] Publish: commit, push, open and link PR, inspect initial checks/comments, then enable PR monitoring.
 
 ## Review focus
 
@@ -28,4 +28,4 @@ Browser tests validate the plugin UI and host API interactions. They cannot prov
 
 ## Validation evidence
 
-95 scenarios passed in Chromium and WebKit (190 checks). Source, host, fixtures, and specs pass TypeScript checking. Independent review found a clipboard permission race; its failing browser regressions now pass. Initial regression runs also demonstrated stale names, split Unicode labels, rejected refreshes, and reader initialization leaks before the fixes. Firefox is enabled in CI but could not launch on this macOS host because its plugin-container process was denied access; Linux CI supplies the remaining engine validation.
+98 scenarios passed in Chromium and WebKit (196 checks), including follow-up review coverage for non-stream replies and the exact reader root. The clipboard mock records the actual selection at copy time. Node.js v20.20.2 also passed the original 95 Chromium scenarios, build, and type checking. Source, host, fixtures, and specs pass TypeScript checking. Independent review found a clipboard permission race; its failing browser regressions now pass. Initial regression runs also demonstrated stale names, split Unicode labels, rejected refreshes, and reader initialization leaks before the fixes. Firefox is enabled in CI but could not launch on this macOS host because its plugin-container process was denied access; Linux CI supplies the remaining engine validation.

@@ -93,7 +93,11 @@ const root = createRoot(document.getElementById('root')!);
   document.execCommand = (command: string) => {
     if (command !== 'copy') throw new Error('Unexpected command');
     if (faults.execCopy === 'throw') throw new Error('Copy failed');
-    if (faults.execCopy) records.clipboardWrites.push((document.activeElement as HTMLTextAreaElement)?.value);
+    if (faults.execCopy) {
+      const field = document.activeElement;
+      records.clipboardWrites.push(field instanceof HTMLTextAreaElement
+        ? field.value.slice(field.selectionStart, field.selectionEnd) : '');
+    }
     return !!faults.execCopy;
   };
   function close() { records.closeCalls++; render(false); }

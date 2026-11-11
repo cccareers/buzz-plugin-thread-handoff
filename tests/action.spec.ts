@@ -1,4 +1,4 @@
-import { test, expect, boot, message, ROOT_ID } from './fixtures/harness';
+import { test, expect, boot, message, ROOT_ID, CHANNEL_ID } from './fixtures/harness';
 
 // These cases exercise the shipped action registration in a real browser.
 for (const delivery of [undefined, 'accepted', 'seen', 'sending', 'unknown', 'failed']) {
@@ -41,6 +41,7 @@ test('starter and a nested reply export the same canonical thread', async ({ pag
   const starterExport = await page.getByRole('textbox', { name: 'Markdown', exact: true }).inputValue();
   await boot(page, { message: message({ id: 'c'.repeat(64), threadRootId: ROOT_ID, replyParentId: 'd'.repeat(64), replyCount: 0 }) });
   await expect(page.getByRole('textbox', { name: 'Markdown', exact: true })).toHaveValue(starterExport);
+  expect(await page.evaluate(() => window.harness.stats().threadCalls)).toEqual([{ channelId: CHANNEL_ID, rootId: ROOT_ID }]);
   const prompt = await page.getByRole('textbox', { name: 'Recap prompt', exact: true }).inputValue();
   expect(prompt).toContain(`id=${ROOT_ID}&thread=${ROOT_ID}`);
 });
@@ -53,3 +54,11 @@ test('installer bundle registers the handoff action with its required host servi
   await page.getByRole('button', { name: 'Open handoff' }).click();
   await expect(page.getByRole('dialog', { name: 'Thread handoff', exact: true })).toBeVisible();
 });
+
+for (const channelType of ['dm', 'solo', 'system']) {
+  test(`${channelType}: a published reply with no replies of its own remains eligible`, async ({ page }) => {
+    await boot(page, { channel: { channelType }, message: message({ id: 'c'.repeat(64), threadRootId: ROOT_ID, replyCount: 0 }) });
+    await expect(page.getByRole('dialog', { name: 'Thread handoff', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => window.harness.stats().threadCalls)).toEqual([{ channelId: CHANNEL_ID, rootId: ROOT_ID }]);
+  });
+}
