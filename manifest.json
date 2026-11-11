@@ -1,0 +1,10 @@
+{
+  "id": "codex.thread-handoff",
+  "name": "Thread Handoff",
+  "apiVersion": 1,
+  "description": "Copy a bounded Buzz thread as Markdown or request a recap in the thread.",
+  "discovery": {
+    "category": "communication",
+    "tags": ["Threads", "Markdown", "Handoff"]
+  }
+}
