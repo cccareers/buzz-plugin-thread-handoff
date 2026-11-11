@@ -4,11 +4,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tests/host/tsconfig.json",
+    "test": "npm run build && playwright test",
+    "test:e2e": "npm test",
+    "test:chromium": "npm run build && playwright test --project=chromium"
   },
   "devDependencies": {
     "@buzz/author": "file:vendor/buzz-author-0.0.0-preview.1.tgz",
+    "@playwright/test": "1.58.2",
+    "@types/node": "26.6.6",
     "@types/react": "19.2.18",
-    "esbuild": "0.28.2"
+    "@types/react-dom": "19.2.3",
+    "esbuild": "0.28.2",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "typescript": "7.0.2"
   }
 }

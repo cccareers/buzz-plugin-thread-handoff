@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "types": ["node"], "lib": ["ES2024", "DOM", "DOM.Iterable"], "allowJs": true },
+  "include": ["./main.tsx", "./plugin-module.d.ts", "../fixtures/*.ts", "../*.spec.ts", "../../playwright.config.ts"]
+}
