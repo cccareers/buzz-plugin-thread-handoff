@@ -21,6 +21,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - name: Align container home ownership for Firefox
+        # GitHub mounts a pwuser-owned home, but the container runs as root.
+        run: chown "$(id -u):$(id -g)" "$HOME"
       - run: npm test
       - name: Check committed installer bundle
         run: git diff --exit-code -- plugin.js
