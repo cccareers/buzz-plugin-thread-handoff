@@ -24,8 +24,11 @@ function sourceLink(message: Pick<Message, "channelId" | "id">, root: string): s
 }
 
 function inlineText(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\\`*_{}\[\]()#+\-.!<>|&]/g, "\\$&");
+  return value.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\uD800-\uDBFF]$/, "").replace(/[\\`*_{}\[\]()#+\-.!<>|&]/g, "\\$&");
 }
+
+const subscribeNoNames = () => () => {};
+const noNamesRevision = () => 0;
 
 function messageBody(message: Message): string {
   const body = message.content.trim();
@@ -102,12 +105,14 @@ function markdown(rows: readonly Message[], coverage: string, channelName: strin
   return [`# Thread handoff · ${inlineText(channelName)}`, coverage, ...blocks].join("\n\n") + "\n";
 }
 
-async function copyText(value: string, field: HTMLTextAreaElement | null): Promise<boolean> {
+async function copyText(value: string, field: HTMLTextAreaElement | null): Promise<boolean | "changed"> {
   try {
     await navigator.clipboard.writeText(value);
     return true;
   } catch {
     if (!field?.isConnected) return false;
+    // Permission prompts may outlive edits or incoming thread updates.
+    if (field.value !== value) return "changed";
     field.focus();
     field.select();
     try {
@@ -172,6 +177,11 @@ export const apply: PluginModule["apply"] = (ctx) => {
     React.useSyncExternalStore(relay.subscribe, relay.snapshot, relay.snapshot);
     React.useSyncExternalStore(session.channels.subscribeList, session.channels.list, session.channels.list);
     React.useSyncExternalStore(session.profiles.subscribe, session.profiles.snapshot, session.profiles.snapshot);
+    React.useSyncExternalStore(
+      session.names?.subscribe ?? subscribeNoNames,
+      session.names?.snapshot ?? noNamesRevision,
+      session.names?.snapshot ?? noNamesRevision,
+    );
 
     React.useLayoutEffect(() => {
       const modal = dialog.current;
@@ -182,21 +192,34 @@ export const apply: PluginModule["apply"] = (ctx) => {
     React.useEffect(() => {
       setSnapshot(undefined);
       setOpenFailed(false);
-      try {
-        const reader = session.thread(channelId, rootId);
-        view.current = reader;
-        const update = () => setSnapshot(reader.snapshot());
-        const unsubscribe = reader.subscribe(update);
-        update();
-        void reader.refresh();
-        return () => {
-          view.current = undefined;
-          unsubscribe();
-          reader.dispose();
-        };
-      } catch {
+      let active = true;
+      let reader: ThreadView | undefined;
+      let unsubscribe: (() => void) | undefined;
+      const cleanup = () => {
+        active = false;
+        if (view.current === reader) view.current = undefined;
+        unsubscribe?.();
+        unsubscribe = undefined;
+        reader?.dispose();
+        reader = undefined;
+      };
+      const failed = () => {
+        if (!active) return;
+        cleanup();
+        setSnapshot(undefined);
         setOpenFailed(true);
+      };
+      try {
+        reader = session.thread(channelId, rootId);
+        view.current = reader;
+        const update = () => { if (active && reader) setSnapshot(reader.snapshot()); };
+        unsubscribe = reader.subscribe(update);
+        update();
+        void reader.refresh().catch(failed);
+      } catch {
+        failed();
       }
+      return cleanup;
     }, [session, channelId, rootId, readAttempt]);
 
     const live = relay.snapshot().session === session;
@@ -251,7 +274,8 @@ export const apply: PluginModule["apply"] = (ctx) => {
           onClick: async () => {
             if (relay.snapshot().session !== session || !view.current || !selectThread(view.current.snapshot(), rootId)) return;
             const copied = await copyText(exportText, markdownField.current);
-            setCopyNotice(copied ? "Markdown copied." : "Clipboard unavailable. Use your copy shortcut on the selected Markdown.");
+            setCopyNotice(copied === "changed" ? "Text changed while copying. Please copy again." :
+              copied ? "Markdown copied." : "Clipboard unavailable. Use your copy shortcut on the selected Markdown.");
           },
         }, "Copy Markdown")),
         h("p", { role: "status" }, copyNotice),
@@ -278,7 +302,8 @@ export const apply: PluginModule["apply"] = (ctx) => {
             type: "button", style: buttonStyle, disabled: !prompt.trim(),
             onClick: async () => {
               const copied = await copyText(prompt, promptField.current);
-              setRecapNotice(copied ? "Recap prompt copied." : "Clipboard unavailable. Use your copy shortcut on the selected prompt.");
+              setRecapNotice(copied === "changed" ? "Text changed while copying. Please copy again." :
+                copied ? "Recap prompt copied." : "Clipboard unavailable. Use your copy shortcut on the selected prompt.");
             },
           }, "Copy recap prompt"),
           options.length > 0 && h("button", {

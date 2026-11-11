@@ -13,8 +13,11 @@ function sourceLink(message, root) {
   return `buzz://message?${query}`;
 }
 function inlineText(value) {
-  return value.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\\`*_{}\[\]()#+\-.!<>|&]/g, "\\$&");
+  return value.replace(/\s+/g, " ").trim().slice(0, 200).replace(/[\uD800-\uDBFF]$/, "").replace(/[\\`*_{}\[\]()#+\-.!<>|&]/g, "\\$&");
 }
+var subscribeNoNames = () => () => {
+};
+var noNamesRevision = () => 0;
 function messageBody(message) {
   const body = message.content.trim();
   const excerpt = body.slice(0, MAX_BODY_LENGTH).replace(/[\uD800-\uDBFF]$/, "");
@@ -91,6 +94,7 @@ async function copyText(value, field) {
     return true;
   } catch {
     if (!field?.isConnected) return false;
+    if (field.value !== value) return "changed";
     field.focus();
     field.select();
     try {
@@ -156,6 +160,11 @@ var apply = (ctx) => {
     React.useSyncExternalStore(relay.subscribe, relay.snapshot, relay.snapshot);
     React.useSyncExternalStore(session.channels.subscribeList, session.channels.list, session.channels.list);
     React.useSyncExternalStore(session.profiles.subscribe, session.profiles.snapshot, session.profiles.snapshot);
+    React.useSyncExternalStore(
+      session.names?.subscribe ?? subscribeNoNames,
+      session.names?.snapshot ?? noNamesRevision,
+      session.names?.snapshot ?? noNamesRevision
+    );
     React.useLayoutEffect(() => {
       const modal = dialog.current;
       modal?.showModal();
@@ -166,21 +175,36 @@ var apply = (ctx) => {
     React.useEffect(() => {
       setSnapshot(void 0);
       setOpenFailed(false);
-      try {
-        const reader = session.thread(channelId, rootId);
-        view.current = reader;
-        const update = () => setSnapshot(reader.snapshot());
-        const unsubscribe = reader.subscribe(update);
-        update();
-        void reader.refresh();
-        return () => {
-          view.current = void 0;
-          unsubscribe();
-          reader.dispose();
-        };
-      } catch {
+      let active = true;
+      let reader;
+      let unsubscribe;
+      const cleanup = () => {
+        active = false;
+        if (view.current === reader) view.current = void 0;
+        unsubscribe?.();
+        unsubscribe = void 0;
+        reader?.dispose();
+        reader = void 0;
+      };
+      const failed = () => {
+        if (!active) return;
+        cleanup();
+        setSnapshot(void 0);
         setOpenFailed(true);
+      };
+      try {
+        reader = session.thread(channelId, rootId);
+        view.current = reader;
+        const update = () => {
+          if (active && reader) setSnapshot(reader.snapshot());
+        };
+        unsubscribe = reader.subscribe(update);
+        update();
+        void reader.refresh().catch(failed);
+      } catch {
+        failed();
       }
+      return cleanup;
     }, [session, channelId, rootId, readAttempt]);
     const live = relay.snapshot().session === session;
     const thread = live && snapshot && snapshot.status !== "loading" && snapshot.status !== "idle" ? selectThread(snapshot, rootId) : void 0;
@@ -247,7 +271,7 @@ var apply = (ctx) => {
           onClick: async () => {
             if (relay.snapshot().session !== session || !view.current || !selectThread(view.current.snapshot(), rootId)) return;
             const copied = await copyText(exportText, markdownField.current);
-            setCopyNotice(copied ? "Markdown copied." : "Clipboard unavailable. Use your copy shortcut on the selected Markdown.");
+            setCopyNotice(copied === "changed" ? "Text changed while copying. Please copy again." : copied ? "Markdown copied." : "Clipboard unavailable. Use your copy shortcut on the selected Markdown.");
           }
         }, "Copy Markdown")),
         h("p", { role: "status" }, copyNotice)
@@ -287,7 +311,7 @@ var apply = (ctx) => {
             disabled: !prompt.trim(),
             onClick: async () => {
               const copied = await copyText(prompt, promptField.current);
-              setRecapNotice(copied ? "Recap prompt copied." : "Clipboard unavailable. Use your copy shortcut on the selected prompt.");
+              setRecapNotice(copied === "changed" ? "Text changed while copying. Please copy again." : copied ? "Recap prompt copied." : "Clipboard unavailable. Use your copy shortcut on the selected prompt.");
             }
           }, "Copy recap prompt"),
           options.length > 0 && h("button", {
