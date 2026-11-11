@@ -9,6 +9,10 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    container:
+      # Keep this version aligned with @playwright/test in package.json.
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,7 +21,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm test
       - name: Check committed installer bundle
         run: git diff --exit-code -- plugin.js
